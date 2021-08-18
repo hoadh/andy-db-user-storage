@@ -1,0 +1,33 @@
+plugins {
+    id 'java'
+}
+
+group 'codegym.vn'
+version '1.0'
+
+//create a single Jar with all dependencies
+task bundleJar(type: Jar) {
+    manifest {
+        attributes 'Implementation-Title': 'CodeGym DB Keycloak SPI',
+                'Implementation-Version': version
+    }
+    project.setProperty("archivesBaseName", project.name + '-bundle')
+    from { configurations.compile.collect { it.isDirectory() ? it : zipTree(it) } }
+    with jar
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // https://mvnrepository.com/artifact/org.keycloak/keycloak-core
+    implementation group: 'org.keycloak', name: 'keycloak-core', version: '15.0.1'
+    // https://mvnrepository.com/artifact/org.keycloak/keycloak-server-spi
+    compileOnly group: 'org.keycloak', name: 'keycloak-server-spi', version: '15.0.1'
+    // https://mvnrepository.com/artifact/mysql/mysql-connector-java
+    compile group: 'mysql', name: 'mysql-connector-java', version: '8.0.26'
+    compile group: 'org.slf4j', name: 'slf4j-log4j12', version: '1.7.29'
+    compile "org.mindrot:jbcrypt:0.4"
+
+}
