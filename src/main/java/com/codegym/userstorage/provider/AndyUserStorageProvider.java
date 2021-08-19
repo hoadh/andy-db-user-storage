@@ -100,8 +100,6 @@ public class AndyUserStorageProvider implements UserStorageProvider,
     @Override
     public boolean isConfiguredFor(RealmModel realm, UserModel user, String credentialType) {
         log.info("isConfiguredFor(realm={},user={},credentialType={})",realm.getName(), user.getUsername(), credentialType);
-        // In our case, password is the only type of credential, so we allways return 'true' if
-        // this is the credentialType
         return supportsCredentialType(credentialType);
     }
 
@@ -121,7 +119,6 @@ public class AndyUserStorageProvider implements UserStorageProvider,
             ResultSet rs = st.getResultSet();
             if ( rs.next()) {
                 String pwd = rs.getString(1);
-                // return pwd.equals(credentialInput.getChallengeResponse());
                 return PasswordUtil.check(credentialInput.getChallengeResponse(), pwd);
             }
             else {
@@ -133,8 +130,6 @@ public class AndyUserStorageProvider implements UserStorageProvider,
         }
     }
 
-    // UserQueryProvider implementation
-    
     @Override
     public int getUsersCount(RealmModel realm) {
         log.info("getUsersCount: realm={}", realm.getName() );
@@ -152,7 +147,7 @@ public class AndyUserStorageProvider implements UserStorageProvider,
 
     @Override
     public List<UserModel> getUsers(RealmModel realm) {
-        return getUsers(realm, FIRST_RESULT, MAX_RESULTS); // Keep a reasonable maxResults
+        return getUsers(realm, FIRST_RESULT, MAX_RESULTS);
     }
 
     @Override
