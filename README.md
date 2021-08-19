@@ -1,4 +1,4 @@
-**Andy User Storage (Keycloak User Federation)**
+**MySQL User Storage (Keycloak User Federation)**
 * Hỗ trợ kết nối user storage của app Laravel/PHP 
 * Sử dụng MySQL Database
 
