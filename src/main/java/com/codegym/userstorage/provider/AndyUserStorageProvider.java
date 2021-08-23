@@ -5,10 +5,7 @@ import com.codegym.userstorage.helpers.PasswordUtil;
 import org.keycloak.component.ComponentModel;
 import org.keycloak.credential.CredentialInput;
 import org.keycloak.credential.CredentialInputValidator;
-import org.keycloak.models.GroupModel;
-import org.keycloak.models.KeycloakSession;
-import org.keycloak.models.RealmModel;
-import org.keycloak.models.UserModel;
+import org.keycloak.models.*;
 import org.keycloak.models.credential.PasswordCredentialModel;
 import org.keycloak.storage.StorageId;
 import org.keycloak.storage.UserStorageProvider;
@@ -18,10 +15,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.sql.*;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class AndyUserStorageProvider implements UserStorageProvider,
   UserLookupProvider, 
@@ -48,46 +42,46 @@ public class AndyUserStorageProvider implements UserStorageProvider,
     public UserModel getUserById(String id, RealmModel realm) {
         log.info("getUserById({})",id);
         StorageId sid = new StorageId(id);
-        return getUserByUsername(sid.getExternalId(),realm);
+        try ( Connection c = DatabaseUtil.getConnection(this.model)) {
+            PreparedStatement st = c.prepareStatement("select id, first_name, last_name, email from users where id = ?");
+            st.setString(1, sid.getExternalId());
+            st.execute();
+            return getUserModelAndRoles(realm, st.getResultSet());
+        }
+        catch(SQLException ex) {
+            throw new RuntimeException("Database error:" + ex.getMessage(),ex);
+        }
     }
 
     @Override
     public UserModel getUserByUsername(String username, RealmModel realm) {
         log.info("getUserByUsername({})",username);
-        try ( Connection c = DatabaseUtil.getConnection(this.model)) {
-            PreparedStatement st = c.prepareStatement("select email as username, first_name, last_name, email from users where email = ?");
-            st.setString(1, username);
-            st.execute();
-            ResultSet rs = st.getResultSet();
-            if ( rs.next()) {
-                return mapUser(realm,rs);
-            }
-            else {
-                return null;
-            }
-        }
-        catch(SQLException ex) {
-            throw new RuntimeException("Database error:" + ex.getMessage(),ex);
-        }
+        return null;
     }
 
     @Override
     public UserModel getUserByEmail(String email, RealmModel realm) {
         log.info("getUserByEmail({})",email);
         try ( Connection c = DatabaseUtil.getConnection(this.model)) {
-            PreparedStatement st = c.prepareStatement("select email as username, first_name, last_name, email from users where email = ?");
+            PreparedStatement st = c.prepareStatement("select id, first_name, last_name, email from users where email = ?");
             st.setString(1, email);
             st.execute();
-            ResultSet rs = st.getResultSet();
-            if ( rs.next()) {
-                return mapUser(realm,rs);
-            }
-            else {
-                return null;
-            }
+            return getUserModelAndRoles(realm, st.getResultSet());
         }
         catch(SQLException ex) {
             throw new RuntimeException("Database error:" + ex.getMessage(),ex);
+        }
+    }
+
+    private UserModel getUserModelAndRoles(RealmModel realm, ResultSet rs) throws SQLException {
+        if ( rs.next()) {
+            AndyUser user = (AndyUser) mapUser(realm,rs);
+            Set<AndyRole> roles = this.getRolesByUserId(rs.getString("id"));
+            user.addRoles(roles);
+            return (UserModel) user;
+        }
+        else {
+            return null;
         }
     }
 
@@ -110,11 +104,11 @@ public class AndyUserStorageProvider implements UserStorageProvider,
             return false;
         }
         StorageId sid = new StorageId(user.getId());
-        String username = sid.getExternalId();
+        String userId = sid.getExternalId();
 
         try ( Connection c = DatabaseUtil.getConnection(this.model)) {
-            PreparedStatement st = c.prepareStatement("select password from users where email = ?");
-            st.setString(1, username);
+            PreparedStatement st = c.prepareStatement("select password from users where id = ?");
+            st.setString(1, userId);
             st.execute();
             ResultSet rs = st.getResultSet();
             if ( rs.next()) {
@@ -155,7 +149,7 @@ public class AndyUserStorageProvider implements UserStorageProvider,
         log.info("getUsers: realm={}", realm.getName());
 
         try ( Connection c = DatabaseUtil.getConnection(this.model)) {
-            PreparedStatement st = c.prepareStatement("select email as username, first_name, last_name, email from users order by username limit ? offset ?");
+            PreparedStatement st = c.prepareStatement("select id, first_name, last_name, email from users order by id limit ? offset ?");
             st.setInt(1, maxResults);
             st.setInt(2, firstResult);
             st.execute();
@@ -181,7 +175,7 @@ public class AndyUserStorageProvider implements UserStorageProvider,
         log.info("searchForUser: realm={}", realm.getName());
 
         try ( Connection c = DatabaseUtil.getConnection(this.model)) {
-            PreparedStatement st = c.prepareStatement("select email as username, first_name, last_name, email from users where email like ? order by username limit ? offset ?");
+            PreparedStatement st = c.prepareStatement("select id, first_name, last_name, email from users where email like ? order by id limit ? offset ?");
             st.setString(1, search);
             st.setInt(2, maxResults);
             st.setInt(3, firstResult);
@@ -224,11 +218,34 @@ public class AndyUserStorageProvider implements UserStorageProvider,
     }
 
     private UserModel mapUser(RealmModel realm, ResultSet rs) throws SQLException {
-        AndyUser user = new AndyUser.Builder(keycloakSession, realm, model, rs.getString("username"))
+        return new AndyUser.Builder(keycloakSession, realm, model, rs.getString("id"))
           .email(rs.getString("email"))
           .firstName(rs.getString("first_name"))
           .lastName(rs.getString("last_name"))
           .build();
-        return user;
+    }
+
+    private Set<AndyRole> getRolesByUserId(String id) {
+        log.info("getRolesByUserId({})",id);
+        StorageId sid = new StorageId(id);
+        ClientModel clientModel = keycloakSession.getContext().getClient();
+        Set<AndyRole> roles = new HashSet<>();
+        try ( Connection c = DatabaseUtil.getConnection(this.model)) {
+            PreparedStatement st = c.prepareStatement("SELECT r.id, r.role_code, r.name, r.description FROM role_user ru INNER JOIN roles r ON r.id  = ru.role_id WHERE ru.user_id = ?");
+            st.setString(1, sid.getExternalId());
+            st.execute();
+            ResultSet rs = st.getResultSet();
+            while ( rs.next()) {
+                AndyRole role = new AndyRole(   rs.getString("id"),
+                                                rs.getString("role_code"),
+                                                rs.getString("name"),
+                                                clientModel);
+                roles.add(role);
+            }
+            return roles;
+        }
+        catch(SQLException ex) {
+            throw new RuntimeException("Database error:" + ex.getMessage(),ex);
+        }
     }
 }

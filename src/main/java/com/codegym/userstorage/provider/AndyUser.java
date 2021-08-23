@@ -2,21 +2,24 @@ package com.codegym.userstorage.provider;
 
 import org.keycloak.common.util.MultivaluedHashMap;
 import org.keycloak.component.ComponentModel;
-import org.keycloak.models.KeycloakSession;
-import org.keycloak.models.RealmModel;
-import org.keycloak.models.UserModel;
+import org.keycloak.models.*;
 import org.keycloak.storage.adapter.AbstractUserAdapter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 
 public class AndyUser extends AbstractUserAdapter {
-
+    private static final Logger log = LoggerFactory.getLogger(AndyUser.class);
     private final String username;
     private final String email;
     private final String firstName;
     private final String lastName;
+    private final Set<AndyRole> roles;
 
     private AndyUser(KeycloakSession session, RealmModel realm,
                      ComponentModel storageProviderModel,
@@ -30,7 +33,7 @@ public class AndyUser extends AbstractUserAdapter {
         this.email = email;
         this.firstName = firstName;
         this.lastName = lastName;
-
+        this.roles = new HashSet<>();
     }
 
     @Override
@@ -60,6 +63,7 @@ public class AndyUser extends AbstractUserAdapter {
         attributes.add(UserModel.EMAIL, getEmail());
         attributes.add(UserModel.FIRST_NAME, getFirstName());
         attributes.add(UserModel.LAST_NAME, getLastName());
+        attributes.add(UserModel.EMAIL_VERIFIED, Boolean.TRUE.toString());
         return attributes;
     }
 
@@ -67,16 +71,16 @@ public class AndyUser extends AbstractUserAdapter {
         private final KeycloakSession session;
         private final RealmModel realm;
         private final ComponentModel storageProviderModel;
-        private String username;
+        private String id;
         private String email;
         private String firstName;
         private String lastName;
 
-        Builder(KeycloakSession session, RealmModel realm, ComponentModel storageProviderModel, String username) {
+        Builder(KeycloakSession session, RealmModel realm, ComponentModel storageProviderModel, String id) {
             this.session = session;
             this.realm = realm;
             this.storageProviderModel = storageProviderModel;
-            this.username = username;
+            this.id = id;
         }
 
         Builder email(String email) {
@@ -99,11 +103,23 @@ public class AndyUser extends AbstractUserAdapter {
                     session,
                     realm,
                     storageProviderModel,
-                    username,
+                    id,
                     email,
                     firstName,
                     lastName
             );
         }
+    }
+
+    @Override
+    public Set<RoleModel> getRoleMappings() {
+        log.info("getRoleMappings()");
+        Set<RoleModel> roles = super.getRoleMappings();
+        roles.addAll(this.roles);
+        return roles;
+    }
+
+    public void addRoles(Set<AndyRole> roles) {
+        this.roles.addAll(roles);
     }
 }
