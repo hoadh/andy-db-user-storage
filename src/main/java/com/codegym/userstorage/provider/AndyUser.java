@@ -122,4 +122,9 @@ public class AndyUser extends AbstractUserAdapter {
     public void addRoles(Set<AndyRole> roles) {
         this.roles.addAll(roles);
     }
+
+    @Override
+    public void removeRequiredAction(String action) {
+        // Nothing here. Override just in order not to throw exception.
+    }
 }

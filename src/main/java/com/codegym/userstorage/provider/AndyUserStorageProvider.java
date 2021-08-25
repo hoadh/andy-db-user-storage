@@ -4,6 +4,7 @@ import com.codegym.userstorage.helpers.DatabaseUtil;
 import com.codegym.userstorage.helpers.PasswordUtil;
 import org.keycloak.component.ComponentModel;
 import org.keycloak.credential.CredentialInput;
+import org.keycloak.credential.CredentialInputUpdater;
 import org.keycloak.credential.CredentialInputValidator;
 import org.keycloak.models.*;
 import org.keycloak.models.credential.PasswordCredentialModel;
@@ -17,10 +18,13 @@ import org.slf4j.LoggerFactory;
 import java.sql.*;
 import java.util.*;
 
-public class AndyUserStorageProvider implements UserStorageProvider,
-  UserLookupProvider, 
-  CredentialInputValidator,
-  UserQueryProvider {
+public class AndyUserStorageProvider implements
+        UserStorageProvider,
+        UserLookupProvider,
+        CredentialInputValidator,
+        UserQueryProvider,
+        CredentialInputUpdater
+{
 
     private static final Logger log = LoggerFactory.getLogger(AndyUserStorageProvider.class);
     public static final int FIRST_RESULT = 0;
@@ -89,6 +93,36 @@ public class AndyUserStorageProvider implements UserStorageProvider,
     public boolean supportsCredentialType(String credentialType) {
         log.info("supportsCredentialType({})",credentialType);
         return PasswordCredentialModel.TYPE.endsWith(credentialType);
+    }
+
+    @Override
+    public boolean updateCredential(RealmModel realm, UserModel user, CredentialInput input) {
+        log.info("updateCredential({})", input.getType());
+        if( !this.supportsCredentialType(input.getType())) {
+            return false;
+        }
+        try ( Connection c = DatabaseUtil.getConnection(this.model)) {
+            StorageId sid = new StorageId(user.getId());
+            String userId = sid.getExternalId();
+            String hash = PasswordUtil.convertToPHPHash(input.getChallengeResponse());
+
+            String updateQuery = "UPDATE users SET password = ? WHERE id = ?";
+            PreparedStatement st = c.prepareStatement(updateQuery);
+            st.setString(1, hash);
+            st.setString(2, userId);
+            return st.executeUpdate() > 0;
+        }
+        catch(SQLException ex) {
+            throw new RuntimeException("Database error:" + ex.getMessage(),ex);
+        }
+    }
+
+    @Override
+    public void disableCredentialType(RealmModel realm, UserModel user, String credentialType) {}
+
+    @Override
+    public Set<String> getDisableableCredentialTypes(RealmModel realm, UserModel user) {
+        return null;
     }
 
     @Override
