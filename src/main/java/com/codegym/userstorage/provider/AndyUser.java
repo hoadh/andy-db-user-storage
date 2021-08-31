@@ -125,6 +125,25 @@ public class AndyUser extends AbstractUserAdapter {
 
     @Override
     public void removeRequiredAction(String action) {
+        log.info("removeRequiredAction(String {})", action);
+        // Nothing here. Override just in order not to throw exception.
+    }
+
+    @Override
+    public void addRequiredAction(String action) {
+        log.info("addRequiredAction(String {})", action);
+        // Nothing here. Override just in order not to throw exception.
+    }
+
+    @Override
+    public void removeRequiredAction(RequiredAction action) {
+        log.info("removeRequiredAction(RequiredAction {})", action.name());
+        // Nothing here. Override just in order not to throw exception.
+    }
+
+    @Override
+    public void addRequiredAction(RequiredAction action) {
+        log.info("addRequiredAction(RequiredAction {})", action.name());
         // Nothing here. Override just in order not to throw exception.
     }
 }
