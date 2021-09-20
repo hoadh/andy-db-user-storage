@@ -19,6 +19,7 @@ public class AndyUser extends AbstractUserAdapter {
     private final String email;
     private final String firstName;
     private final String lastName;
+    private final boolean enabled;
     private final Set<AndyRole> roles;
 
     private AndyUser(KeycloakSession session, RealmModel realm,
@@ -26,7 +27,8 @@ public class AndyUser extends AbstractUserAdapter {
                      String username,
                      String email,
                      String firstName,
-                     String lastName
+                     String lastName,
+                     boolean enabled
     ) {
         super(session, realm, storageProviderModel);
         this.username = username;
@@ -34,6 +36,7 @@ public class AndyUser extends AbstractUserAdapter {
         this.firstName = firstName;
         this.lastName = lastName;
         this.roles = new HashSet<>();
+        this.enabled = enabled;
     }
 
     @Override
@@ -57,6 +60,11 @@ public class AndyUser extends AbstractUserAdapter {
     }
 
     @Override
+    public boolean isEnabled() {
+        return enabled;
+    }
+
+    @Override
     public Map<String, List<String>> getAttributes() {
         MultivaluedHashMap<String, String> attributes = new MultivaluedHashMap<>();
         attributes.add(UserModel.USERNAME, getUsername());
@@ -64,6 +72,7 @@ public class AndyUser extends AbstractUserAdapter {
         attributes.add(UserModel.FIRST_NAME, getFirstName());
         attributes.add(UserModel.LAST_NAME, getLastName());
         attributes.add(UserModel.EMAIL_VERIFIED, Boolean.TRUE.toString());
+        attributes.add(UserModel.ENABLED, String.valueOf(isEnabled()));
         return attributes;
     }
 
@@ -75,6 +84,7 @@ public class AndyUser extends AbstractUserAdapter {
         private String email;
         private String firstName;
         private String lastName;
+        private boolean enabled;
 
         Builder(KeycloakSession session, RealmModel realm, ComponentModel storageProviderModel, String id) {
             this.session = session;
@@ -98,6 +108,11 @@ public class AndyUser extends AbstractUserAdapter {
             return this;
         }
 
+        Builder enabled(boolean enabled) {
+            this.enabled = enabled;
+            return this;
+        }
+
         AndyUser build() {
             return new AndyUser(
                     session,
@@ -106,7 +121,8 @@ public class AndyUser extends AbstractUserAdapter {
                     id,
                     email,
                     firstName,
-                    lastName
+                    lastName,
+                    enabled
             );
         }
     }

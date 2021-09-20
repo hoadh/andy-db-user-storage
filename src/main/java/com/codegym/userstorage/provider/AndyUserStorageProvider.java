@@ -28,7 +28,15 @@ public class AndyUserStorageProvider implements
 
     private static final Logger log = LoggerFactory.getLogger(AndyUserStorageProvider.class);
     public static final int FIRST_RESULT = 0;
-    public static final int MAX_RESULTS = 5000;
+    public static final int MAX_RESULTS = 50;
+    public static final String SELECT_USER_BY_ID        = "select id, first_name, last_name, email, is_locked from users where id = ?";
+    public static final String SELECT_USER_BY_EMAIL     = "select id, first_name, last_name, email, is_locked from users where email = ?";
+    public static final String SELECT_USERS_LIMIT       = "select id, first_name, last_name, email, is_locked from users order by id limit ? offset ?";
+    public static final String SEARCH_USERS_BY_EMAIL    = "select id, first_name, last_name, email, is_locked from users where email like ? order by id limit ? offset ?";
+    public static final String UPDATE_PASSWORD_BY_ID    = "UPDATE users SET password = ? WHERE id = ?";
+    public static final String SELECT_PASSWORD_BY_ID    = "select password from users where id = ?";
+    public static final String COUNT_USERS              = "select count(*) from users";
+    public static final String SELECT_ROLES_BY_USER_ID  = "SELECT r.id, r.role_code, r.name, r.description FROM role_user ru INNER JOIN roles r ON r.id  = ru.role_id WHERE ru.user_id = ?";
     private KeycloakSession keycloakSession;
     private ComponentModel model;
 
@@ -47,7 +55,7 @@ public class AndyUserStorageProvider implements
         log.info("getUserById({})",id);
         StorageId sid = new StorageId(id);
         try ( Connection c = DatabaseUtil.getConnection(this.model)) {
-            PreparedStatement st = c.prepareStatement("select id, first_name, last_name, email from users where id = ?");
+            PreparedStatement st = c.prepareStatement(SELECT_USER_BY_ID);
             st.setString(1, sid.getExternalId());
             st.execute();
             return getUserModelAndRoles(realm, st.getResultSet());
@@ -67,7 +75,7 @@ public class AndyUserStorageProvider implements
     public UserModel getUserByEmail(String email, RealmModel realm) {
         log.info("getUserByEmail({})",email);
         try ( Connection c = DatabaseUtil.getConnection(this.model)) {
-            PreparedStatement st = c.prepareStatement("select id, first_name, last_name, email from users where email = ?");
+            PreparedStatement st = c.prepareStatement(SELECT_USER_BY_EMAIL);
             st.setString(1, email);
             st.execute();
             return getUserModelAndRoles(realm, st.getResultSet());
@@ -106,7 +114,7 @@ public class AndyUserStorageProvider implements
             String userId = sid.getExternalId();
             String hash = PasswordUtil.convertToPHPHash(input.getChallengeResponse());
 
-            String updateQuery = "UPDATE users SET password = ? WHERE id = ?";
+            String updateQuery = UPDATE_PASSWORD_BY_ID;
             PreparedStatement st = c.prepareStatement(updateQuery);
             st.setString(1, hash);
             st.setString(2, userId);
@@ -133,7 +141,7 @@ public class AndyUserStorageProvider implements
 
     @Override
     public boolean isValid(RealmModel realm, UserModel user, CredentialInput credentialInput) {
-        log.info("isValid(realm={},user={},credentialInput.type={})",realm.getName(), user.getUsername(), credentialInput.getType());
+        log.info("isValid(realm={},user={},credentialInput.type={},enabled={})",realm.getName(), user.getUsername(), credentialInput.getType(), user.isEnabled());
         if( !this.supportsCredentialType(credentialInput.getType())) {
             return false;
         }
@@ -141,7 +149,7 @@ public class AndyUserStorageProvider implements
         String userId = sid.getExternalId();
 
         try ( Connection c = DatabaseUtil.getConnection(this.model)) {
-            PreparedStatement st = c.prepareStatement("select password from users where id = ?");
+            PreparedStatement st = c.prepareStatement(SELECT_PASSWORD_BY_ID);
             st.setString(1, userId);
             st.execute();
             ResultSet rs = st.getResultSet();
@@ -163,7 +171,7 @@ public class AndyUserStorageProvider implements
         log.info("getUsersCount: realm={}", realm.getName() );
         try ( Connection c = DatabaseUtil.getConnection(this.model)) {
             Statement st = c.createStatement();
-            st.execute("select count(*) from users");
+            st.execute(COUNT_USERS);
             ResultSet rs = st.getResultSet();
             rs.next();
             return rs.getInt(1);
@@ -183,7 +191,7 @@ public class AndyUserStorageProvider implements
         log.info("getUsers: realm={}", realm.getName());
 
         try ( Connection c = DatabaseUtil.getConnection(this.model)) {
-            PreparedStatement st = c.prepareStatement("select id, first_name, last_name, email from users order by id limit ? offset ?");
+            PreparedStatement st = c.prepareStatement(SELECT_USERS_LIMIT);
             st.setInt(1, maxResults);
             st.setInt(2, firstResult);
             st.execute();
@@ -209,7 +217,7 @@ public class AndyUserStorageProvider implements
         log.info("searchForUser: realm={}", realm.getName());
 
         try ( Connection c = DatabaseUtil.getConnection(this.model)) {
-            PreparedStatement st = c.prepareStatement("select id, first_name, last_name, email from users where email like ? order by id limit ? offset ?");
+            PreparedStatement st = c.prepareStatement(SEARCH_USERS_BY_EMAIL);
             st.setString(1, search);
             st.setInt(2, maxResults);
             st.setInt(3, firstResult);
@@ -252,10 +260,12 @@ public class AndyUserStorageProvider implements
     }
 
     private UserModel mapUser(RealmModel realm, ResultSet rs) throws SQLException {
+        boolean isEnabled = rs.getInt("is_locked") == 0;
         return new AndyUser.Builder(keycloakSession, realm, model, rs.getString("id"))
           .email(rs.getString("email"))
           .firstName(rs.getString("first_name"))
           .lastName(rs.getString("last_name"))
+          .enabled(isEnabled)
           .build();
     }
 
@@ -265,7 +275,7 @@ public class AndyUserStorageProvider implements
         ClientModel clientModel = keycloakSession.getContext().getClient();
         Set<AndyRole> roles = new HashSet<>();
         try ( Connection c = DatabaseUtil.getConnection(this.model)) {
-            PreparedStatement st = c.prepareStatement("SELECT r.id, r.role_code, r.name, r.description FROM role_user ru INNER JOIN roles r ON r.id  = ru.role_id WHERE ru.user_id = ?");
+            PreparedStatement st = c.prepareStatement(SELECT_ROLES_BY_USER_ID);
             st.setString(1, sid.getExternalId());
             st.execute();
             ResultSet rs = st.getResultSet();
